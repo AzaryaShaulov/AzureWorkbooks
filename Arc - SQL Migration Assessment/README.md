@@ -14,7 +14,7 @@ The workbook has seven tabs:
   SQL builds use `properties.currentVersion`; missing builds
   display `Unknown`.
 - **Assessment & Arc Readiness** combines connectivity, extension and inventory health,
-  freshness, MI/DB/VM readiness, pricing, prerequisites, BPA, and links. SQL-detected
+  migration freshness, MI/DB/VM readiness, pricing, prerequisites, and links. SQL-detected
   hosts without a visible instance remain `Not discovered / not visible`.
 - **Recommendations** displays target readiness, preferred targets, SKU details, costs,
   blocker counts, and disk configuration.
@@ -24,7 +24,9 @@ The workbook has seven tabs:
   storage, and IOPS prices. Missing, duplicate, incomplete, or negative options are
   unavailable; explicit zero prices remain valid.
 - **Cost Comparison** compares Ready Azure targets by currency. It is not on-premises
-  TCO or realized savings.
+  TCO or realized savings. The monthly difference is the highest-cost Ready Azure
+  alternative minus the selected preferred target; 12- and 36-month values multiply
+  that gap by 12 and 36 with unchanged prices and usage.
 
 ## Readiness Semantics
 
@@ -33,7 +35,7 @@ uses the selected threshold. Unknown means evidence is absent or unverified, not
 Green indicates healthy evidence, yellow attention/unknown, red failure or unsupported,
 and gray not configured/not applicable.
 
-ARG does not expose current migration or BPA job status. Timestamps prove only that data
+ARG does not expose current migration-assessment job status. Timestamps prove only that data
 was uploaded. `Next Action` opens priority guidance; resource links open the Arc host or
 SQL instance. Detailed reports may require additional permissions.
 
@@ -43,7 +45,8 @@ For `MigrateToPaaS`, the workbook selects the cheapest Ready, priced MI or DB ta
 (MI wins ties). For `MigrateToIaaS`, it selects a Ready, priced VM. Disabled assessments,
 unknown currencies, unsupported strategies, and unpriced targets are excluded. Stale
 assessment prices remain visible and may be outdated. AHB entitlement and savings are
-not inferred without a matched license baseline.
+not inferred without a matched license-included baseline and verified licensing records.
+`Not verified` means eligibility is unknown, not that the organization is ineligible.
 
 ## Use
 
@@ -67,5 +70,4 @@ targets, currencies, host-only rows, links, exports, and result truncation. Reap
 JSON through Advanced Editor; refreshing an imported workbook does not load local changes.
 
 References: [Migration assessment](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment?view=sql-server-ver17),
-[Best practices assessment](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/assess), and
 [SQL extension troubleshooting](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/troubleshoot-extension).

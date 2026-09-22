@@ -33,6 +33,9 @@ Assert-Contract ($document.version -eq 'Notebook/1.0') 'Unexpected workbook vers
 $parameters = @($items | Where-Object type -EQ 9 | ForEach-Object { $_.content.parameters })
 Assert-Contract (@($parameters.name | Select-Object -Unique).Count -eq $parameters.Count) 'Duplicate parameter name.'
 Assert-Contract (@($parameters.id | Select-Object -Unique).Count -eq $parameters.Count) 'Duplicate parameter ID.'
+$subscriptions = $parameters | Where-Object name -EQ Subscriptions
+Assert-Contract ($subscriptions.type -eq 6 -and $subscriptions.multiSelect -and $subscriptions.isRequired) 'Subscriptions must use the required multi-select subscription picker.'
+Assert-Contract ($null -eq $subscriptions.value) 'Subscriptions must not contain a tenant-specific default value.'
 $queries = @($items | Where-Object type -EQ 3 | ForEach-Object { $_.content }) + @($parameters | Where-Object query)
 foreach ($query in $queries) {
     Assert-Contract ($query.queryType -eq 1 -and $query.resourceType -eq 'microsoft.resourcegraph/resources') 'Query must use ARG.'
@@ -48,11 +51,16 @@ Assert-Contract (($tabs | Where-Object value -EQ readiness).label -eq 'Assessmen
 foreach ($tab in $tabs) {
     Assert-Contract (@($items | Where-Object { $_.conditionalVisibility.parameterName -eq 'SelectedTab' -and $_.conditionalVisibility.value -eq $tab.value }).Count -eq 1) "Tab has no unique group: $($tab.value)"
 }
+Assert-Contract ($byName['ov-title'].json.Contains('[AzureWorkbooks repository](https://github.com/AzaryaShaulov/AzureWorkbooks)')) 'Overview repository source link missing.'
 
 $readiness = $byName['ready-grid']
 Assert-Contract ($readiness.visualization -eq 'table' -and $readiness.showExportToExcel -and $readiness.gridSettings.filter) 'Readiness must reuse the filterable/exportable table.'
-foreach ($column in @('Server Name', 'SQL Instance Name', 'Overall Readiness', 'Action Required', 'Azure Arc Connected', 'SQL Server Extension Status', 'Inventory Reporting', 'Last Successful Inventory Upload', 'Migration Assessment Enabled', 'Assessment Freshness', 'Last Migration Report Upload', 'MI Readiness', 'DB Readiness', 'VM Readiness', 'Pricing Status', 'Prerequisite Status', 'Host OS', 'Best Practices Assessment Enabled', 'Next Action', 'Migration Assessment Results', 'SQL Resource', 'Host Resource')) {
+foreach ($column in @('Server Name', 'SQL Instance Name', 'Overall Readiness', 'Action Required', 'Azure Arc Connected', 'SQL Server Extension Status', 'Inventory Reporting', 'Last Successful Inventory Upload', 'Migration Assessment Enabled', 'Assessment Freshness', 'Last Migration Report Upload', 'MI Readiness', 'DB Readiness', 'VM Readiness', 'Host OS', 'Next Action', 'Migration Assessment Results', 'SQL Resource', 'Host Resource')) {
     Assert-Contract ($readiness.query.Contains("['$column'] = ")) "Readiness column missing: $column"
+}
+foreach ($column in @('Pricing Status', 'Prerequisite Status')) {
+    Assert-Contract (-not $readiness.query.Contains("['$column'] = ")) "Readiness must not expose the $column column."
+    Assert-Contract ($null -eq ($readiness.gridSettings.formatters | Where-Object columnMatch -EQ $column)) "Removed readiness column still has a formatter: $column"
 }
 Assert-Contract ($readiness.query.Contains('join kind=fullouter')) 'SQL-detected hosts without instances must be retained.'
 Assert-Contract (($parameters | Where-Object name -EQ ResourceGroup).query.Contains('properties.detectedProperties.mssqldiscovered')) 'Resource group selector must include SQL-detected hosts.'
@@ -60,7 +68,6 @@ Assert-Contract ($readiness.query.Contains('isnotempty(ResourceId) or SQLDetecte
 Assert-Contract ($readiness.query.Contains('summarize ExtensionCount = countif(not(IsHost))')) 'Extension aggregation must count extensions only and not multiply instance rows.'
 Assert-Contract ($readiness.query.Contains('ExtensionCount != 1')) 'Multiple extensions must not silently become healthy.'
 Assert-Contract ($readiness.query.Contains("ScopeTags = iff(isnotempty(ResourceId), InstanceTags, HostTags)")) 'Tag scope must use instances with host-only fallback.'
-Assert-Contract ($readiness.query.Contains("tobool(properties.bestPracticesAssessment.enabled)")) 'Use the documented BPA enabled flag.'
 Assert-Contract ($readiness.query.Contains("InventoryTime < ago(3d)")) 'Old inventory is not current reporting.'
 Assert-Contract ($readiness.query.Contains("InventoryTime > now()")) 'Future inventory must not be healthy.'
 Assert-Contract ($readiness.query.Contains("ExtensionInstalled = iff(ExtensionCount > 0, 'Yes', 'Unknown')")) 'Missing extension visibility must not be labelled No.'
@@ -70,7 +77,8 @@ Assert-Contract ([regex]::Matches($readiness.query, '\| join ').Count -eq 1) 'Re
 Assert-Contract ($readiness.query.Contains("isnull(ExtensionCount) or ExtensionCount == 0, 'Unknown'")) 'An empty extension collection must not be labelled multiple or absent.'
 Assert-Contract ($readiness.query.Contains("'Attention')`n| extend Reporting = ")) 'Reporting must reference ExtensionStatus only after its extend statement.'
 Assert-Contract ($readiness.query -notmatch '\| mv-expand |\| union ') 'Readiness must not multiply SQL instance rows through expansion.'
-Assert-Contract ($readiness.query -notmatch 'asmt\.status|bestPracticesAssessment\.status|migration\.assessment\.status') 'Do not invent ARG assessment lifecycle fields.'
+Assert-Contract ($readiness.query -notmatch 'asmt\.status|migration\.assessment\.status') 'Do not invent ARG assessment lifecycle fields.'
+Assert-Contract ($readiness.query -notmatch '(?i)best[ -]?practices|bestPractices|\bBPA\b') 'Readiness must not include Best Practices Assessment data.'
 Assert-Contract ($readiness.query.Contains("not(HasInstance), 'Not applicable'")) 'Host-only assessment fields must be explicitly not applicable.'
 Assert-Contract ($readiness.query.Contains("SQLMajorVersion = toint(split(CurrentVersion, '.')[0])")) 'Prerequisite checks must use the documented currentVersion build.'
 Assert-Contract ($readiness.query.Contains("ReadinessSeverity = case(not(HasInstance), 1, PrerequisiteStatus startswith 'Unsupported', 2, ArcConnected == 'No', 3")) 'Readiness severity must preserve the documented triage priority.'
@@ -83,16 +91,11 @@ foreach ($format in $readiness.gridSettings.formatters | Where-Object formatter 
     Assert-Contract (($format.formatOptions.thresholdsGrid | Where-Object operator -EQ Default).representation -eq 'yellow') 'Unverified readiness evidence must require attention.'
 }
 $overallFormat = $readiness.gridSettings.formatters | Where-Object columnMatch -EQ 'Overall Readiness'
-$prerequisiteFormat = $readiness.gridSettings.formatters | Where-Object columnMatch -EQ 'Prerequisite Status'
 foreach ($value in @('Unsupported: Linux host', 'Unsupported: SQL Server before 2014')) {
     Assert-Contract (($overallFormat.formatOptions.thresholdsGrid | Where-Object thresholdValue -EQ $value).representation -eq 'red') "Overall readiness must mark '$value' red."
-    Assert-Contract (($prerequisiteFormat.formatOptions.thresholdsGrid | Where-Object thresholdValue -EQ $value).representation -eq 'red') "Prerequisite status must mark '$value' red."
 }
-Assert-Contract (($prerequisiteFormat.formatOptions.thresholdsGrid | Where-Object thresholdValue -EQ 'Not applicable').representation -eq 'gray') 'Host-only prerequisite status must be gray.'
-foreach ($column in @('Migration Assessment Enabled', 'Best Practices Assessment Enabled')) {
-    $format = $readiness.gridSettings.formatters | Where-Object columnMatch -EQ $column
-    Assert-Contract (($format.formatOptions.thresholdsGrid | Where-Object thresholdValue -EQ No).representation -eq 'gray') 'Disabled assessments must be gray, not failed.'
-}
+$migrationFormat = $readiness.gridSettings.formatters | Where-Object columnMatch -EQ 'Migration Assessment Enabled'
+Assert-Contract (($migrationFormat.formatOptions.thresholdsGrid | Where-Object thresholdValue -EQ No).representation -eq 'gray') 'Disabled migration assessments must be gray, not failed.'
 Assert-Contract (($readiness.gridSettings.formatters | Where-Object columnMatch -EQ 'Migration Assessment Results').formatOptions.linkTarget -eq 'Resource') 'Use the existing resource navigation for migration results.'
 foreach ($column in @('SQL Resource', 'Host Resource')) {
     Assert-Contract (($readiness.gridSettings.formatters | Where-Object columnMatch -EQ $column).formatOptions.linkTarget -eq 'Resource') "$column resource link missing."
@@ -126,6 +129,13 @@ foreach ($disk in @(
     Assert-Contract (-not $recommendations.Contains("$($disk.Column) = tostring($($disk.Array))")) 'Do not render disk arrays as raw JSON.'
 }
 Assert-Contract ([regex]::Matches($recommendations, '\| mv-expand ').Count -eq 1) 'Disk summaries must not multiply recommendation rows.'
+Assert-Contract ($recommendations.Contains('| order by Preferred desc, SQLArcResourceName asc, MonthlyCost asc')) 'Recommendations query must sort Preferred rows first.'
+$recommendationSort = @($byName['rec-grid'].gridSettings.sortBy)
+Assert-Contract ($recommendationSort.Count -eq 3) 'Recommendations grid must define Preferred, instance, and cost sorting.'
+Assert-Contract ($recommendationSort[0].itemKey -eq 'Preferred' -and $recommendationSort[0].sortOrder -eq 2) 'Recommendations grid must sort Preferred descending first.'
+Assert-Contract ($recommendationSort[1].itemKey -eq 'SQLArcResourceName' -and $recommendationSort[1].sortOrder -eq 1) 'Recommendations instance tie-breaker missing.'
+Assert-Contract ($recommendationSort[2].itemKey -eq 'MonthlyCost' -and $recommendationSort[2].sortOrder -eq 1) 'Recommendations cost tie-breaker missing.'
+Assert-Contract (($byName['rec-grid'].sortBy | ConvertTo-Json -Compress) -ceq ($byName['rec-grid'].gridSettings.sortBy | ConvertTo-Json -Compress)) 'Recommendations sort settings must remain synchronized.'
 foreach ($target in @('MI', 'DB', 'VM')) {
     Assert-Contract ($prefix -match "$($target)ReadyCost = iff\(tobool\(asmt.enabled\) == true.*?recommendationStatus\) =~ 'Ready' and $($target)Cost >= 0") "$target cost bypasses eligibility."
 }
@@ -133,14 +143,24 @@ Assert-Contract ($prefix.Contains('BaselineReady = max_of(MIReadyCost, DBReadyCo
 Assert-Contract ($prefix.Contains("Currency == 'Unknown', 'Unknown currency'")) 'Unknown currency must be excluded.'
 Assert-Contract ($byName['rec-grid'].query.Contains("IsPreferredByStrategy = ComparisonStatus == 'Comparable' and Target == PreferredTarget")) 'Preferred marker must require comparable target.'
 Assert-Contract ($byName['tco-kpi'].query -match 'by Currency') 'Comparison aggregates currencies together.'
+Assert-Contract ($byName['tco-kpi'].query.Contains("['Monthly Difference'] = MonthlyDifference")) 'Summary monthly difference label is unclear.'
+Assert-Contract ($byName['tco-kpi'].query.Contains("['12-Month Difference'] = AnnualDifference") -and $byName['tco-kpi'].query.Contains('AnnualDifference = MonthlyDifference * 12')) 'Summary 12-month difference formula or label is incorrect.'
+Assert-Contract ($byName['tco-kpi'].query.Contains("['36-Month Difference'] = ThreeYearDifference") -and $byName['tco-kpi'].query.Contains('ThreeYearDifference = MonthlyDifference * 36')) 'Summary 36-month difference formula or label is incorrect.'
+foreach ($name in @('tco-kpi', 'tco-grid')) {
+    foreach ($column in @('Monthly Difference', '12-Month Difference', '36-Month Difference')) {
+        $format = $byName[$name].gridSettings.formatters | Where-Object columnMatch -EQ $column
+        Assert-Contract ($format.numberFormat.options.minimumFractionDigits -eq 2 -and $format.numberFormat.options.maximumFractionDigits -eq 2) "$name must display $column with two decimal places."
+    }
+}
 Assert-Contract (-not $byName.ContainsKey('ov-card-cost')) 'Removed overview monthly-cost item must not return.'
 $titles = @($items | Where-Object { $_.content.title } | ForEach-Object { $_.content.title })
 Assert-Contract ($titles -notcontains 'Monthly costs by instance and target (all rows; eligibility shown)') 'Removed monthly-cost title must not return.'
 foreach ($name in @('rec-grid', 'prc-grid', 'tco-kpi', 'tco-grid')) {
     Assert-Contract ($byName[$name].query.Contains('{CurrencyFilter}')) "$name ignores the currency filter."
 }
-Assert-Contract ($byName['tco-grid'].query.Contains("AHBEntitlement = 'Not verified'")) 'License entitlement must not be inferred.'
-Assert-Contract ($byName['tco-grid'].query.Contains('Unavailable: matched license baseline required')) 'Unsupported AHB savings claim.'
+Assert-Contract ($byName['tco-grid'].query.Contains("['AHB Entitlement'] = 'Not verified'")) 'License entitlement must not be inferred.'
+Assert-Contract ($byName['tco-grid'].query.Contains("['AHB Savings'] = 'Unavailable: matched license baseline required'")) 'Unsupported AHB savings claim.'
+Assert-Contract ($byName['tco-title'].json.Contains('Azure Hybrid Benefit (AHB)') -and $byName['tco-title'].json.Contains('Not verified') -and $byName['tco-title'].json.Contains('workbook cannot determine eligibility')) 'Cost Comparison must explain AHB savings and entitlement.'
 
 $pricing = $byName['prc-grid'].query
 Assert-Contract ($pricing.Contains('dynamic([null])')) 'Empty option arrays must retain a row.'
@@ -192,4 +212,6 @@ foreach ($parameter in $parameters | Where-Object name -In @('TagName', 'TagValu
 }
 $text = ($items | Where-Object type -EQ 1 | ForEach-Object { $_.content.json }) -join "`n"
 Assert-Contract ($text -notmatch 'Azure Data Studio|sum as-is|AHBEligible|RISavings_PerMonth') 'Obsolete guidance remains.'
+$workbookText = [System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $Path).Path)
+Assert-Contract ($workbookText -notmatch '(?i)best[ -]?practices|bestPractices|\bBPA\b') 'Workbook must contain only migration and readiness assessment data.'
 Write-Output "PASS: $script:checks local structure and query-contract checks. Live ARG execution and portal rendering NOT tested."
