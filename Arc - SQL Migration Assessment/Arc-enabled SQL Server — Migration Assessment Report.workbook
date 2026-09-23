@@ -127,6 +127,9 @@
             "name": "InstanceFilter",
             "label": "SQL instance (Databases)",
             "type": 2,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
             "typeSettings": {
               "additionalResourceOptions": ["value::all"],
               "showDefault": false
@@ -159,7 +162,7 @@
               "additionalResourceOptions": [],
               "showDefault": false
             },
-            "jsonData": "[{\"value\":\"overview\",\"label\":\"Overview\",\"selected\":true},{\"value\":\"inventory\",\"label\":\"Inventory\"},{\"value\":\"readiness\",\"label\":\"Assessment & Arc Readiness\"},{\"value\":\"recommendations\",\"label\":\"Recommendations\"},{\"value\":\"databases\",\"label\":\"Databases\"},{\"value\":\"pricing\",\"label\":\"Pricing Options\"},{\"value\":\"tco\",\"label\":\"Cost Comparison\"}]"
+            "jsonData": "[{\"value\":\"overview\",\"label\":\"Overview\",\"selected\":true},{\"value\":\"inventory\",\"label\":\"Inventory\"},{\"value\":\"readiness\",\"label\":\"Assessment & Arc Readiness\"},{\"value\":\"recommendations\",\"label\":\"Migration Target Recommendations\"},{\"value\":\"databases\",\"label\":\"Databases Assessed\"},{\"value\":\"pricing\",\"label\":\"Pricing: PAYGO vs RI\"}]"
           }
         ],
         "style": "above",
@@ -177,7 +180,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Assessment & Arc Readiness\n\nOne operational view for Arc connectivity, SQL extension health, inventory reporting, migration-assessment freshness, target readiness, pricing availability, and prerequisites. SQL-detected Arc hosts without a visible SQL instance remain visible; instance-only assessment fields show Not applicable on those rows.\n\nGreen: configured and healthy. Yellow: attention or unverified evidence. Red: failed, unhealthy, or unsupported. Gray: explicitly not configured or not applicable. Inventory reporting requires a successful upload within three days; assessment freshness uses the selected threshold.\n\nARG does not expose current migration-assessment job status. Report availability proves only that a report was uploaded. Use Next Action and resource links for configuration and results. [Migration assessment](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment?view=sql-server-ver17)"
+              "json": "### Assessment & Arc Readiness\n\nOperational readiness for Arc-enabled SQL Server hosts and instances. This view combines Arc connectivity, SQL extension health, inventory reporting, migration-assessment freshness, target readiness, pricing availability, and prerequisite checks. SQL-detected Arc hosts without a visible SQL instance remain visible; instance-only assessment fields show `Not applicable`.\n\n**Columns to read first**\n- **Overall Readiness / Action Required** — the highest-priority condition and the actions needed to address it.\n- **Azure Arc Connected / SQL Server Extension Status / Inventory Reporting** — host connectivity, extension health, and whether successful inventory was uploaded within three days.\n- **Migration Assessment Enabled** — whether `properties.migration.assessment.enabled` is reported as enabled.\n- **Assessment Freshness / Last Migration Report Upload** — freshness derived from the selected threshold and the latest reported upload time.\n- **MI Readiness / DB Readiness / VM Readiness** — server-level target status reported by the migration assessment.\n- **Next Action / Migration Assessment Results** — links to relevant guidance and the Arc SQL resource.\n\nGreen means configured and healthy; yellow means attention or unverified evidence; red means failed, unhealthy, or unsupported; gray means not configured or not applicable. ARG does not expose the current assessment job status, and a report timestamp proves only that results were uploaded. [Migration assessment guidance](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment?view=sql-server-ver17)"
             },
             "name": "ready-title"
           },
@@ -281,7 +284,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Overview\n\nLatest Arc inventory and assessment results reported to Azure Resource Graph. Readiness is instance-level; database compatibility findings require the Arc assessment report.\n\nCosts are retail assessment estimates, grouped by currency. Only enabled, Ready targets with non-negative prices and known currency contribute to monetary totals. Coverage differs by target; excluded counts include unavailable or ineligible data. Stale assessments remain visible and may contain outdated prices.\n\nSource: [AzureWorkbooks repository](https://github.com/AzaryaShaulov/AzureWorkbooks)"
+              "json": "### Overview\n\nExecutive snapshot of Arc-enabled SQL Server instances in scope. All numbers come from Azure Resource Graph and reflect the latest reported Arc inventory and migration-assessment payloads.\n\n**Tiles to read first**\n- **Migration assessment coverage** — counts total instances and whether assessment is enabled, disabled, or not reported.\n- **Assessment freshness alert** — groups instances by the selected freshness threshold and highlights missing, invalid, future, or stale uploads.\n- **Servers ready by recommended target** — server-level Ready / NotReady status for Azure SQL MI, Azure SQL DB, and SQL Server on Azure VM. Per-database inventory is in **Databases Assessed**.\n- **Assessment cost options & strategy** — active lookback, percentile, discount, target location, strategy, and SQL/Windows license options that drive reported costs.\n\nReadiness is instance-level; detailed database compatibility findings require the Arc assessment report. Costs are retail assessment estimates and stale assessments may contain outdated prices.\n\nSource: [AzureWorkbooks repository](https://github.com/AzaryaShaulov/AzureWorkbooks)"
             },
             "name": "ov-title"
           },
@@ -451,7 +454,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Inventory\n\nSQL instances, Arc hosts, and SQL extensions. Missing host or extension data can indicate limited permissions or incomplete inventory, not necessarily an absent installation. Inventory timestamps and assessment timestamps describe separate uploads."
+              "json": "### Inventory — Arc-enabled SQL Server instances\n\nOne row per Arc SQL instance, joined with its parent Arc-enabled host machine and Arc SQL extension when those resources are visible.\n\n**Columns to read first**\n- **SQLInstanceName / SQLVersion / SQLProductVersion / SQLEdition** — SQL identity and version details reported by the Arc SQL resource.\n- **SQLCoreCount** — vCores reported by the agent and used by the assessment engine for SKU sizing.\n- **HostMachineName / HostOSName / HostOSVersion / AgentVersion / AgentStatus** — properties from the joined `microsoft.hybridcompute/machines` resource. A disconnected agent stops inventory and assessment updates.\n- **ArcSqlExtInstalled / ArcSqlExtVersion / ArcSqlExtState** — state of the Arc SQL Server extension (`WindowsAgent.SqlServer` or `LinuxAgent.SqlServer`).\n- **LastInventoryUpload** — the latest SQL inventory upload reported to Azure Resource Manager.\n- **ResourceId** — opens the Arc SQL resource; selecting a row also scopes the database filter to that full resource ID.\n\nMissing host or extension data can indicate limited permissions or incomplete inventory, not necessarily an absent installation. Inventory and assessment timestamps represent separate uploads."
             },
             "name": "inv-title"
           },
@@ -588,7 +591,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Migration Target Recommendations\n\nAssessment-reported readiness, target SKUs, and cost components. The workbook-selected preferred target is the least-cost Ready, priced PaaS target for `MigrateToPaaS`, or a Ready, priced VM for `MigrateToIaaS`. Disabled assessments, unknown currencies, and unrecognized strategies have no preferred selection. This is a local comparison rule, not a replacement for the assessment engine's recommendation.\n\nBlocker counts and license-cost fields are displayed as reported; missing values are not zero or proof of license entitlement. [Compatibility findings and remediation](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment#compatibility) are available in the Arc resource's Migration > Assessments report, subject to telemetry permissions.",
+              "json": "### Migration Target Recommendations\n\nOne row per **SQL instance and target SKU**. An assessed instance can produce candidate rows for **Azure SQL MI**, **Azure SQL DB**, and **SQL Server on Azure VM**. Use the target and preferred filters to narrow the table.\n\n**Columns to read first**\n- **Preferred** — `Yes` when the workbook selects the target using the configured strategy and a valid Ready price. For `MigrateToPaaS`, the least-cost Ready MI or DB is selected; for `MigrateToIaaS`, a Ready VM is selected.\n- **Target Readiness** — the assessment-reported status. `Recommendation not reported` means no status is present and does not mean NotReady.\n- **Assessment Status / Status Explanation** — whether assessment is enabled and the first actionable reason a row cannot be compared or selected.\n- **ServerBlockers / ImpactedObjectCount** — assessment-reported counts; detailed compatibility findings are not exposed in this ARG view.\n- **MonthlyCost** — reported total of compute, storage, IOPS, SQL license, and Windows license components in the instance currency.\n- **SKU and disk columns** — recommended service tier, hardware, compute, storage, throughput, VM shape, and first reported disk configuration.\n\nPreferred selection is a workbook comparison rule, not a replacement for the assessment engine's recommendation. Missing license-cost values are not zero or proof of entitlement. [Compatibility findings and remediation](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment#compatibility) are available from the Arc SQL resource's Migration > Assessments report, subject to telemetry permissions.",
               "style": "info"
             },
             "name": "rec-title"
@@ -635,7 +638,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.azurearcdata/sqlserverinstances'\n| where 'value::all' in ({ResourceGroup}) or '*' in ({ResourceGroup}) or resourceGroup in~ ({ResourceGroup})\n| where '{TagName}' == '' or tostring(tags['{TagName}']) =~ '{TagValue}'\n| extend asmt = properties.migration.assessment\n| extend r = asmt.skuRecommendationResults, Strategy = tostring(asmt.settings.strategy), Currency = coalesce(tostring(asmt.settings.currency), 'Unknown')\n| where 'value::all' in ({CurrencyFilter}) or '*' in ({CurrencyFilter}) or Currency in ({CurrencyFilter})\n| extend MICost = todouble(r.azureSqlManagedInstance.monthlyCost.totalCost), DBCost = todouble(r.azureSqlDatabase.monthlyCost.totalCost), VMCost = todouble(r.azureSqlVirtualMachine.monthlyCost.totalCost)\n| extend MIReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlManagedInstance.recommendationStatus) =~ 'Ready' and MICost >= 0, MICost, real(null)), DBReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlDatabase.recommendationStatus) =~ 'Ready' and DBCost >= 0, DBCost, real(null)), VMReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlVirtualMachine.recommendationStatus) =~ 'Ready' and VMCost >= 0, VMCost, real(null))\n| extend PaaSCheapest = min_of(MIReadyCost, DBReadyCost)\n| extend PreferredTarget = case(Strategy =~ 'MigrateToIaaS' and isnotnull(VMReadyCost), 'SQL Server on Azure VM', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest) and MIReadyCost == PaaSCheapest, 'Azure SQL MI', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest), 'Azure SQL DB', '')\n| extend SelectedTotal = case(PreferredTarget == 'SQL Server on Azure VM', VMReadyCost, PreferredTarget == 'Azure SQL MI', MIReadyCost, PreferredTarget == 'Azure SQL DB', DBReadyCost, real(null)), BaselineReady = max_of(MIReadyCost, DBReadyCost, VMReadyCost)\n| extend ComparisonStatus = case(Currency == 'Unknown', 'Unknown currency', isnull(tobool(asmt.enabled)), 'Assessment state unknown', tobool(asmt.enabled) != true, 'Assessment disabled', Strategy !in~ ('MigrateToIaaS','MigrateToPaaS'), 'Unrecognized strategy', isnull(SelectedTotal), 'No Ready priced target for strategy', 'Comparable')\n| extend MonthlyDifference = iff(ComparisonStatus == 'Comparable', BaselineReady - SelectedTotal, real(null))\n| extend impacted = asmt.impactedObjectsSummary\n| project name, id, resourceGroup, subscriptionId, Currency, Strategy, PreferredTarget, ComparisonStatus, AssessmentEnabled = case(isnull(tobool(asmt.enabled)), 'Unknown', tobool(asmt.enabled) == true, 'Yes', 'No'), Targets = pack_array(pack('Target','Azure SQL MI','Data',r.azureSqlManagedInstance,'ImpactedObjectCount',toint(array_length(impacted.azureSqlManagedInstance))), pack('Target','Azure SQL DB','Data',r.azureSqlDatabase,'ImpactedObjectCount',toint(array_length(impacted.azureSqlDatabase))), pack('Target','SQL Server on Azure VM','Data',r.azureSqlVirtualMachine,'ImpactedObjectCount',toint(array_length(impacted.azureSqlVirtualMachine))))\n| mv-expand Targets\n| extend Target = tostring(Targets.Target), Data = Targets.Data, ImpactedObjectCount = toint(Targets.ImpactedObjectCount)\n| extend sku = Data.targetSku, RecommendationStatus = coalesce(tostring(Data.recommendationStatus), 'Unknown')\n| extend IsPreferredByStrategy = ComparisonStatus == 'Comparable' and Target == PreferredTarget, ServerBlockers = toint(Data.numberOfServerBlockerIssues)\n| extend Notes = case(IsPreferredByStrategy, 'Selected by workbook strategy and Ready price; confirm database compatibility in the Arc assessment report.', ComparisonStatus != 'Comparable', ComparisonStatus, RecommendationStatus =~ 'NotReady', 'Review compatibility findings in the Arc resource: Migration > Assessments.', RecommendationStatus =~ 'Ready', 'Ready alternative; not the workbook-selected target.', 'Readiness unknown; inspect assessment health.')\n| where Target in ({TargetFilter})\n| where '{OnlyPreferred}' == 'false' or IsPreferredByStrategy == true\n| extend Preferred = iff(IsPreferredByStrategy, 'Yes', '')\n| extend dataDisks = sku.dataDiskSizes, logDisks = sku.logDiskSizes, tempDbDisks = sku.tempDbDiskSizes, vmSize = sku.virtualMachineSize\n| extend dataDiskCount = array_length(dataDisks), logDiskCount = array_length(logDisks), tempDbDiskCount = array_length(tempDbDisks)\n| extend DataDisk = case(isnull(dataDiskCount), 'Unknown', dataDiskCount == 0, 'None reported', strcat(iff(dataDiskCount == 1, '1 disk: ', strcat(dataDiskCount, ' disks; first: ')), coalesce(tostring(dataDisks[0].size), 'Unknown SKU'), ', ', coalesce(tostring(dataDisks[0].maxSizeInGib), 'Unknown'), ' GiB, ', coalesce(tostring(dataDisks[0].maxIops), 'Unknown'), ' IOPS, ', coalesce(tostring(dataDisks[0].maxThroughputInMbps), 'Unknown'), ' MB/s, cache=', coalesce(tostring(dataDisks[0].caching), 'Unknown')))\n| extend LogDisk = case(isnull(logDiskCount), 'Unknown', logDiskCount == 0, 'None reported', strcat(iff(logDiskCount == 1, '1 disk: ', strcat(logDiskCount, ' disks; first: ')), coalesce(tostring(logDisks[0].size), 'Unknown SKU'), ', ', coalesce(tostring(logDisks[0].maxSizeInGib), 'Unknown'), ' GiB, ', coalesce(tostring(logDisks[0].maxIops), 'Unknown'), ' IOPS, ', coalesce(tostring(logDisks[0].maxThroughputInMbps), 'Unknown'), ' MB/s, cache=', coalesce(tostring(logDisks[0].caching), 'Unknown')))\n| extend TempDbDisk = case(isnull(tempDbDiskCount), 'Unknown', tempDbDiskCount == 0, 'None reported', strcat(iff(tempDbDiskCount == 1, '1 disk: ', strcat(tempDbDiskCount, ' disks; first: ')), coalesce(tostring(tempDbDisks[0].size), 'Unknown SKU'), ', ', coalesce(tostring(tempDbDisks[0].maxSizeInGib), 'Unknown'), ' GiB, ', coalesce(tostring(tempDbDisks[0].maxIops), 'Unknown'), ' IOPS, ', coalesce(tostring(tempDbDisks[0].maxThroughputInMbps), 'Unknown'), ' MB/s, cache=', coalesce(tostring(tempDbDisks[0].caching), 'Unknown')))\n| project Preferred, SQLArcResourceName = name, Target, Readiness = RecommendationStatus, AssessmentEnabled, ServerBlockers, Notes, MonthlyCost = todouble(Data.monthlyCost.totalCost), ComputeCost = todouble(Data.monthlyCost.computeCost), StorageCost = todouble(Data.monthlyCost.storageCost), IOPSCost = todouble(Data.monthlyCost.iopsCost), SQLLicenseCost = todouble(Data.monthlyCost.sqlLicenseCost), WindowsLicenseCost = todouble(Data.monthlyCost.windowsLicenseCost), Currency, Strategy, PurchasingModel = tostring(sku.category.sqlPurchasingModel), SkuServiceTier = tostring(sku.category.sqlServiceTier), SkuHardware = tostring(sku.category.hardwareType), SkuComputeTier = tostring(sku.category.computeTier), SkuComputeSize = toint(sku.computeSize), ZoneRedundant = tobool(sku.category.zoneRedundancyAvailable), SkuStorageMaxSizeMB = todouble(sku.storageMaxSizeInMb), SkuMaxStorageIops = todouble(sku.maxStorageIops), SkuMaxThroughputMBps = todouble(sku.maxThroughputMBps), PredictedDataMB = todouble(sku.predictedDataSizeInMb), PredictedLogMB = todouble(sku.predictedLogSizeInMb), VmAzureSku = tostring(vmSize.azureSkuName), VmFamily = tostring(vmSize.virtualMachineFamily), VmVCPUs = toint(vmSize.vCPUsAvailable), VmAltSkus = iff(isnotnull(sku.category.availableVmSkus), strcat_array(sku.category.availableVmSkus, ', '), ''), DataDisk, LogDisk, TempDbDisk, ImpactedObjectCount, ResourceId = id, ResourceGroup = resourceGroup, SubscriptionId = subscriptionId\n| order by Preferred desc, SQLArcResourceName asc, MonthlyCost asc",
+              "query": "resources\n| where type =~ 'microsoft.azurearcdata/sqlserverinstances'\n| where 'value::all' in ({ResourceGroup}) or '*' in ({ResourceGroup}) or resourceGroup in~ ({ResourceGroup})\n| where '{TagName}' == '' or tostring(tags['{TagName}']) =~ '{TagValue}'\n| extend asmt = properties.migration.assessment\n| extend r = asmt.skuRecommendationResults, Strategy = tostring(asmt.settings.strategy), Currency = coalesce(tostring(asmt.settings.currency), 'Unknown')\n| where 'value::all' in ({CurrencyFilter}) or '*' in ({CurrencyFilter}) or Currency in ({CurrencyFilter})\n| extend MICost = todouble(r.azureSqlManagedInstance.monthlyCost.totalCost), DBCost = todouble(r.azureSqlDatabase.monthlyCost.totalCost), VMCost = todouble(r.azureSqlVirtualMachine.monthlyCost.totalCost)\n| extend MIReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlManagedInstance.recommendationStatus) =~ 'Ready' and MICost >= 0, MICost, real(null)), DBReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlDatabase.recommendationStatus) =~ 'Ready' and DBCost >= 0, DBCost, real(null)), VMReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlVirtualMachine.recommendationStatus) =~ 'Ready' and VMCost >= 0, VMCost, real(null))\n| extend PaaSCheapest = min_of(MIReadyCost, DBReadyCost)\n| extend PreferredTarget = case(Strategy =~ 'MigrateToIaaS' and isnotnull(VMReadyCost), 'SQL Server on Azure VM', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest) and MIReadyCost == PaaSCheapest, 'Azure SQL MI', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest), 'Azure SQL DB', '')\n| extend SelectedTotal = case(PreferredTarget == 'SQL Server on Azure VM', VMReadyCost, PreferredTarget == 'Azure SQL MI', MIReadyCost, PreferredTarget == 'Azure SQL DB', DBReadyCost, real(null)), BaselineReady = max_of(MIReadyCost, DBReadyCost, VMReadyCost)\n| extend ComparisonStatus = case(Currency == 'Unknown', 'Unknown currency', isnull(tobool(asmt.enabled)), 'Assessment state unknown', tobool(asmt.enabled) != true, 'Assessment disabled', Strategy !in~ ('MigrateToIaaS','MigrateToPaaS'), 'Unrecognized strategy', isnull(SelectedTotal), 'No Ready priced target for strategy', 'Comparable')\n| extend MonthlyDifference = iff(ComparisonStatus == 'Comparable', BaselineReady - SelectedTotal, real(null))\n| extend impacted = asmt.impactedObjectsSummary\n| project name, id, resourceGroup, subscriptionId, Currency, Strategy, PreferredTarget, ComparisonStatus, AssessmentStatus = case(isnull(tobool(asmt.enabled)), 'State not reported', tobool(asmt.enabled) == true, 'Enabled', 'Disabled'), Targets = pack_array(pack('Target','Azure SQL MI','Data',r.azureSqlManagedInstance,'ImpactedObjectCount',toint(array_length(impacted.azureSqlManagedInstance))), pack('Target','Azure SQL DB','Data',r.azureSqlDatabase,'ImpactedObjectCount',toint(array_length(impacted.azureSqlDatabase))), pack('Target','SQL Server on Azure VM','Data',r.azureSqlVirtualMachine,'ImpactedObjectCount',toint(array_length(impacted.azureSqlVirtualMachine))))\n| mv-expand Targets\n| extend Target = tostring(Targets.Target), Data = Targets.Data, ImpactedObjectCount = toint(Targets.ImpactedObjectCount)\n| extend sku = Data.targetSku, ReportedReadiness = tostring(Data.recommendationStatus)\n| extend TargetReadiness = case(AssessmentStatus == 'Disabled', 'Not assessed: disabled', AssessmentStatus == 'State not reported', 'Not assessed: state not reported', isempty(ReportedReadiness), 'Recommendation not reported', ReportedReadiness)\n| extend IsPreferredByStrategy = ComparisonStatus == 'Comparable' and Target == PreferredTarget, ServerBlockers = toint(Data.numberOfServerBlockerIssues)\n| extend Notes = case(AssessmentStatus == 'Disabled', 'Migration assessment is disabled; enable and run it to produce target recommendations.', AssessmentStatus == 'State not reported', 'Migration assessment state was not reported; verify Arc inventory and assessment configuration.', TargetReadiness == 'Recommendation not reported', 'No recommendation was reported for this target; run or verify the migration assessment and result upload.', Currency == 'Unknown', 'Assessment currency was not reported; costs cannot be compared or a preferred target selected.', ComparisonStatus != 'Comparable', ComparisonStatus, IsPreferredByStrategy, 'Selected by workbook strategy and Ready price; confirm database compatibility in the Arc assessment report.', TargetReadiness =~ 'NotReady', 'Review compatibility findings in the Arc resource: Migration > Assessments.', TargetReadiness =~ 'Ready', 'Ready alternative; not the workbook-selected target.', strcat('Assessment reported an unrecognized readiness value: ', TargetReadiness))\n| where Target in ({TargetFilter})\n| where '{OnlyPreferred}' == 'false' or IsPreferredByStrategy == true\n| extend Preferred = iff(IsPreferredByStrategy, 'Yes', '')\n| extend dataDisks = sku.dataDiskSizes, logDisks = sku.logDiskSizes, tempDbDisks = sku.tempDbDiskSizes, vmSize = sku.virtualMachineSize\n| extend dataDiskCount = array_length(dataDisks), logDiskCount = array_length(logDisks), tempDbDiskCount = array_length(tempDbDisks)\n| extend DataDisk = case(isnull(dataDiskCount), 'Unknown', dataDiskCount == 0, 'None reported', strcat(iff(dataDiskCount == 1, '1 disk: ', strcat(dataDiskCount, ' disks; first: ')), coalesce(tostring(dataDisks[0].size), 'Unknown SKU'), ', ', coalesce(tostring(dataDisks[0].maxSizeInGib), 'Unknown'), ' GiB, ', coalesce(tostring(dataDisks[0].maxIops), 'Unknown'), ' IOPS, ', coalesce(tostring(dataDisks[0].maxThroughputInMbps), 'Unknown'), ' MB/s, cache=', coalesce(tostring(dataDisks[0].caching), 'Unknown')))\n| extend LogDisk = case(isnull(logDiskCount), 'Unknown', logDiskCount == 0, 'None reported', strcat(iff(logDiskCount == 1, '1 disk: ', strcat(logDiskCount, ' disks; first: ')), coalesce(tostring(logDisks[0].size), 'Unknown SKU'), ', ', coalesce(tostring(logDisks[0].maxSizeInGib), 'Unknown'), ' GiB, ', coalesce(tostring(logDisks[0].maxIops), 'Unknown'), ' IOPS, ', coalesce(tostring(logDisks[0].maxThroughputInMbps), 'Unknown'), ' MB/s, cache=', coalesce(tostring(logDisks[0].caching), 'Unknown')))\n| extend TempDbDisk = case(isnull(tempDbDiskCount), 'Unknown', tempDbDiskCount == 0, 'None reported', strcat(iff(tempDbDiskCount == 1, '1 disk: ', strcat(tempDbDiskCount, ' disks; first: ')), coalesce(tostring(tempDbDisks[0].size), 'Unknown SKU'), ', ', coalesce(tostring(tempDbDisks[0].maxSizeInGib), 'Unknown'), ' GiB, ', coalesce(tostring(tempDbDisks[0].maxIops), 'Unknown'), ' IOPS, ', coalesce(tostring(tempDbDisks[0].maxThroughputInMbps), 'Unknown'), ' MB/s, cache=', coalesce(tostring(tempDbDisks[0].caching), 'Unknown')))\n| project Preferred, SQLArcResourceName = name, Target, ['Target Readiness'] = TargetReadiness, ['Assessment Status'] = AssessmentStatus, ServerBlockers, ['Status Explanation'] = Notes, MonthlyCost = todouble(Data.monthlyCost.totalCost), ComputeCost = todouble(Data.monthlyCost.computeCost), StorageCost = todouble(Data.monthlyCost.storageCost), IOPSCost = todouble(Data.monthlyCost.iopsCost), SQLLicenseCost = todouble(Data.monthlyCost.sqlLicenseCost), WindowsLicenseCost = todouble(Data.monthlyCost.windowsLicenseCost), Currency, Strategy, PurchasingModel = tostring(sku.category.sqlPurchasingModel), SkuServiceTier = tostring(sku.category.sqlServiceTier), SkuHardware = tostring(sku.category.hardwareType), SkuComputeTier = tostring(sku.category.computeTier), SkuComputeSize = toint(sku.computeSize), ZoneRedundant = tobool(sku.category.zoneRedundancyAvailable), SkuStorageMaxSizeMB = todouble(sku.storageMaxSizeInMb), SkuMaxStorageIops = todouble(sku.maxStorageIops), SkuMaxThroughputMBps = todouble(sku.maxThroughputMBps), PredictedDataMB = todouble(sku.predictedDataSizeInMb), PredictedLogMB = todouble(sku.predictedLogSizeInMb), VmAzureSku = tostring(vmSize.azureSkuName), VmFamily = tostring(vmSize.virtualMachineFamily), VmVCPUs = toint(vmSize.vCPUsAvailable), VmAltSkus = iff(isnotnull(sku.category.availableVmSkus), strcat_array(sku.category.availableVmSkus, ', '), ''), DataDisk, LogDisk, TempDbDisk, ImpactedObjectCount, ResourceId = id, ResourceGroup = resourceGroup, SubscriptionId = subscriptionId\n| order by Preferred desc, SQLArcResourceName asc, MonthlyCost asc",
               "size": 0,
               "showAnalytics": true,
               "showExportToExcel": true,
@@ -655,7 +658,7 @@
                     }
                   },
                   {
-                    "columnMatch": "Readiness",
+                    "columnMatch": "Target Readiness",
                     "formatter": 18,
                     "formatOptions": {
                       "thresholdsOptions": "colors",
@@ -671,6 +674,17 @@
                           "thresholdValue": "NotReady",
                           "representation": "red",
                           "text": "{0}"
+                        },                        {
+                          "operator": "==",
+                          "thresholdValue": "Not assessed: disabled",
+                          "representation": "gray",
+                          "text": "{0}"
+                        },
+                        {
+                          "operator": "==",
+                          "thresholdValue": "Recommendation not reported",
+                          "representation": "yellow",
+                          "text": "{0}"
                         },
                         {
                           "operator": "Default",
@@ -682,34 +696,34 @@
                     }
                   },
                   {
-                    "columnMatch": "AssessmentEnabled",
+                    "columnMatch": "Assessment Status",
                     "formatter": 18,
                     "formatOptions": {
                       "thresholdsOptions": "icons",
                       "thresholdsGrid": [
                         {
                           "operator": "==",
-                          "thresholdValue": "Yes",
+                          "thresholdValue": "Enabled",
                           "representation": "success",
-                          "text": "Yes"
+                          "text": "Enabled"
                         },
                         {
                           "operator": "==",
-                          "thresholdValue": "No",
+                          "thresholdValue": "Disabled",
                           "representation": "critical",
-                          "text": "No"
+                          "text": "Disabled"
                         },
                         {
                           "operator": "Default",
                           "thresholdValue": null,
                           "representation": "warning",
-                          "text": "Unknown"
+                          "text": "State not reported"
                         }
                       ]
                     }
                   },
                   {
-                    "columnMatch": "Notes",
+                    "columnMatch": "Status Explanation",
                     "formatter": 1
                   },
                   {
@@ -950,7 +964,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Databases\n\nDatabase inventory scoped through parent SQL instances and their tags. ServerMI, ServerDB, and ServerVM are parent-instance readiness states, not per-database compatibility results. Encryption is the reported database setting, not proof of migration readiness. Detailed findings are available in the [Arc assessment Compatibility report](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment#compatibility)."
+              "json": "### Databases Assessed\n\nOne row per reported database (`microsoft.azurearcdata/sqlserverinstances/databases`). Use **SQL instance (Databases)** to select one or more parent instances; **All** shows every reported database in the current subscription, resource-group, and tag scope.\n\n**Columns to read first**\n- **DatabaseName / DatabaseState** — database name and reported state such as Online, Offline, or Restoring.\n- **SizeMB / SpaceAvailableMB / DataFileSizeMB / LogFileSizeMB** — storage footprint reported by the Arc agent.\n- **RecoveryMode / CompatibilityLevel / Collation / IsReadOnly / IsEncrypted** — reported SQL database configuration. `IsEncrypted` reports encryption state; it is not proof of migration readiness.\n- **CreatedDate / LastUpload** — database creation time and latest database inventory upload.\n- **ServerAssessment** — Enabled, Disabled, or Unknown on the parent SQL instance.\n- **ServerMI / ServerDB / ServerVM** — parent-instance Ready, NotReady, or Unknown status for each target; these are not per-database compatibility results.\n\nARG does not expose detailed per-database compatibility reasons in this table. Review the [Arc assessment Compatibility report](https://learn.microsoft.com/en-us/sql/sql-server/azure-arc/migration-assessment#compatibility) for object-level findings."
             },
             "name": "db-title"
           },
@@ -958,7 +972,7 @@
             "type": 3,
             "content": {
               "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.azurearcdata/sqlserverinstances/databases'\n| extend p = properties, parts = split(id, '/')\n| extend ParentId = tolower(strcat_array(array_slice(parts, 0, 8), '/'))\n| where '{InstanceFilter}' in ('', 'value::all') or ParentId =~ '{InstanceFilter}'\n| project DatabaseName = name, SQLArcResourceName = tostring(parts[8]), ParentId, ResourceGroup = resourceGroup, SubscriptionId = subscriptionId, Location = location, ResourceId = id, DatabaseState = tostring(p.state), SizeMB = todouble(p.sizeMB), SpaceAvailableMB = todouble(p.spaceAvailableMB), DataFileSizeMB = todouble(p.dataFileSizeMB), LogFileSizeMB = todouble(p.logFileSizeMB), RecoveryMode = tostring(p.recoveryMode), CompatibilityLevel = toint(p.compatibilityLevel), Collation = tostring(p.collationName), IsReadOnly = tobool(p.isReadOnly), IsEncrypted = tobool(p.databaseOptions.isEncrypted), CreatedDate = todatetime(p.databaseCreationDate), LastUpload = todatetime(p.lastDatabaseUploadTime)\n| join kind=inner (\n    resources\n    | where type =~ 'microsoft.azurearcdata/sqlserverinstances'\n    | where 'value::all' in ({ResourceGroup}) or '*' in ({ResourceGroup}) or resourceGroup in~ ({ResourceGroup})\n    | where '{TagName}' == '' or tostring(tags['{TagName}']) =~ '{TagValue}'\n    | extend asmt = properties.migration.assessment\n    | extend results = asmt.skuRecommendationResults\n    | project ParentId = tolower(id), ServerAssessment = case(isnull(tobool(asmt.enabled)), 'Unknown', tobool(asmt.enabled) == true, 'Enabled', 'Disabled'), ServerMI = coalesce(tostring(results.azureSqlManagedInstance.recommendationStatus), 'Unknown'), ServerDB = coalesce(tostring(results.azureSqlDatabase.recommendationStatus), 'Unknown'), ServerVM = coalesce(tostring(results.azureSqlVirtualMachine.recommendationStatus), 'Unknown'), ServerStrategy = tostring(asmt.settings.strategy)\n) on ParentId\n| project-away ParentId, ParentId1\n| order by SQLArcResourceName asc, DatabaseName asc",
+              "query": "resources\n| where type =~ 'microsoft.azurearcdata/sqlserverinstances/databases'\n| extend p = properties, parts = split(id, '/')\n| extend ParentId = tolower(strcat_array(array_slice(parts, 0, 8), '/'))\n| where 'value::all' in ({InstanceFilter}) or '*' in ({InstanceFilter}) or ParentId in~ ({InstanceFilter})\n| project DatabaseName = name, SQLArcResourceName = tostring(parts[8]), ParentId, ResourceGroup = resourceGroup, SubscriptionId = subscriptionId, Location = location, ResourceId = id, DatabaseState = tostring(p.state), SizeMB = todouble(p.sizeMB), SpaceAvailableMB = todouble(p.spaceAvailableMB), DataFileSizeMB = todouble(p.dataFileSizeMB), LogFileSizeMB = todouble(p.logFileSizeMB), RecoveryMode = tostring(p.recoveryMode), CompatibilityLevel = toint(p.compatibilityLevel), Collation = tostring(p.collationName), IsReadOnly = tobool(p.isReadOnly), IsEncrypted = tobool(p.databaseOptions.isEncrypted), CreatedDate = todatetime(p.databaseCreationDate), LastUpload = todatetime(p.lastDatabaseUploadTime)\n| join kind=inner (\n    resources\n    | where type =~ 'microsoft.azurearcdata/sqlserverinstances'\n    | where 'value::all' in ({ResourceGroup}) or '*' in ({ResourceGroup}) or resourceGroup in~ ({ResourceGroup})\n    | where '{TagName}' == '' or tostring(tags['{TagName}']) =~ '{TagValue}'\n    | extend asmt = properties.migration.assessment\n    | extend results = asmt.skuRecommendationResults\n    | project ParentId = tolower(id), ServerAssessment = case(isnull(tobool(asmt.enabled)), 'Unknown', tobool(asmt.enabled) == true, 'Enabled', 'Disabled'), ServerMI = coalesce(tostring(results.azureSqlManagedInstance.recommendationStatus), 'Unknown'), ServerDB = coalesce(tostring(results.azureSqlDatabase.recommendationStatus), 'Unknown'), ServerVM = coalesce(tostring(results.azureSqlVirtualMachine.recommendationStatus), 'Unknown'), ServerStrategy = tostring(asmt.settings.strategy)\n) on ParentId\n| project-away ParentId, ParentId1\n| order by SQLArcResourceName asc, DatabaseName asc",
               "size": 0,
               "showAnalytics": true,
               "showExportToExcel": true,
@@ -1200,7 +1214,7 @@
           {
             "type": 1,
             "content": {
-              "json": "### Pricing Options\n\nRetail assessment estimates for compute + storage + IOPS, excluding license costs. PAYG, one-year RI, and three-year RI correspond to the reported `WithNoOptionsSelected`, `With1YearRIAndProd`, and `With3YearRIAndProd` options.\n\nUnavailable means an option is absent, duplicated, incomplete, or contains negative costs. Explicit zero costs remain valid. Cheapest compares available options only; incomplete coverage is not a full market comparison. NotReady targets are retained for inspection, not recommended for purchase. Annual differences assume unchanged monthly prices and usage; customer-specific contractual pricing is not established here."
+              "json": "### Pricing: PAYGO vs RI\n\n> **Preview pricing.** These figures use assessment-reported retail estimates and do **not** reflect customer-specific discounts, private offers, or an existing reservation portfolio.\n\nFor each assessed SQL instance and Azure target, this tab compares three compute purchase models. License costs are excluded; each option is calculated from compute, storage, and IOPS.\n\n**Columns to read first**\n- **Cheapest** — the lowest available PAYG, one-year RI, or three-year RI estimate for an instance and target.\n- **PricingStatus** — Complete only when each option is reported exactly once with valid non-negative components.\n- **PAYG** — reported `WithNoOptionsSelected` option.\n- **RI_1Yr** — reported `With1YearRIAndProd` option.\n- **RI_3Yr** — reported `With3YearRIAndProd` option.\n- **SavingsVsPAYG_3Yr_Pct** — `(PAYG - RI_3Yr) / PAYG × 100` when both values are valid.\n- **AnnualSavings_3Yr** — `(PAYG - RI_3Yr) × 12`, assuming unchanged monthly prices and usage.\n- **Readiness** — server-level Ready / NotReady status for the target. NotReady rows remain visible for inspection and are not purchase recommendations.\n\n`Unavailable` means an option is absent, duplicated, incomplete, or has a negative component; an explicit zero remains valid. Currency and assessment discount/target-location settings are reported per instance."
             },
             "name": "prc-title"
           },
@@ -1385,207 +1399,7 @@
         "value": "pricing"
       },
       "name": "group-pricing"
-    },
-    {
-      "type": 12,
-      "content": {
-        "version": "NotebookGroup/1.0",
-        "groupType": "editable",
-        "items": [
-          {
-            "type": 1,
-            "content": {
-              "json": "### Azure Target Cost Comparison\n\n**How to read the difference columns:** For each comparable SQL instance, the workbook subtracts the selected preferred target's monthly cost from the highest-cost Ready, priced Azure alternative. A positive value is the estimated cost gap between those Azure targets, not guaranteed savings. The summary adds those gaps for each currency. **12-Month Difference = Monthly Difference × 12** and **36-Month Difference = Monthly Difference × 36**. Values display to two decimal places and assume prices and usage remain unchanged.\n\nThis is an Azure-target comparison, not on-premises TCO, realized savings, or a business-case baseline. Selection uses enabled assessments and known strategy values: `MigrateToPaaS` selects the cheapest Ready, priced MI or DB; `MigrateToIaaS` selects a Ready, priced VM. Unrecognized strategies and unknown currencies are excluded from totals and retained with a reason. Ties prefer MI. Stale results remain visible.\n\n**Azure Hybrid Benefit (AHB):** AHB may reduce Azure costs when eligible existing SQL Server or Windows Server licenses are reused. **AHB Savings** would be the estimated reduction against an equivalent license-included price, but this workbook has no matched license-included baseline, so it displays **Unavailable**. **AHB Entitlement** indicates whether license eligibility has been established; **Not verified** means the workbook cannot determine eligibility, not that the organization is ineligible. Confirm entitlement from licensing records and applicable Microsoft licensing terms. SQL edition alone is not proof of entitlement."
-            },
-            "name": "tco-title"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.azurearcdata/sqlserverinstances'\n| where 'value::all' in ({ResourceGroup}) or '*' in ({ResourceGroup}) or resourceGroup in~ ({ResourceGroup})\n| where '{TagName}' == '' or tostring(tags['{TagName}']) =~ '{TagValue}'\n| extend asmt = properties.migration.assessment\n| extend r = asmt.skuRecommendationResults, Strategy = tostring(asmt.settings.strategy), Currency = coalesce(tostring(asmt.settings.currency), 'Unknown')\n| where 'value::all' in ({CurrencyFilter}) or '*' in ({CurrencyFilter}) or Currency in ({CurrencyFilter})\n| extend MICost = todouble(r.azureSqlManagedInstance.monthlyCost.totalCost), DBCost = todouble(r.azureSqlDatabase.monthlyCost.totalCost), VMCost = todouble(r.azureSqlVirtualMachine.monthlyCost.totalCost)\n| extend MIReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlManagedInstance.recommendationStatus) =~ 'Ready' and MICost >= 0, MICost, real(null)), DBReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlDatabase.recommendationStatus) =~ 'Ready' and DBCost >= 0, DBCost, real(null)), VMReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlVirtualMachine.recommendationStatus) =~ 'Ready' and VMCost >= 0, VMCost, real(null))\n| extend PaaSCheapest = min_of(MIReadyCost, DBReadyCost)\n| extend PreferredTarget = case(Strategy =~ 'MigrateToIaaS' and isnotnull(VMReadyCost), 'SQL Server on Azure VM', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest) and MIReadyCost == PaaSCheapest, 'Azure SQL MI', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest), 'Azure SQL DB', '')\n| extend SelectedTotal = case(PreferredTarget == 'SQL Server on Azure VM', VMReadyCost, PreferredTarget == 'Azure SQL MI', MIReadyCost, PreferredTarget == 'Azure SQL DB', DBReadyCost, real(null)), BaselineReady = max_of(MIReadyCost, DBReadyCost, VMReadyCost)\n| extend ComparisonStatus = case(Currency == 'Unknown', 'Unknown currency', isnull(tobool(asmt.enabled)), 'Assessment state unknown', tobool(asmt.enabled) != true, 'Assessment disabled', Strategy !in~ ('MigrateToIaaS','MigrateToPaaS'), 'Unrecognized strategy', isnull(SelectedTotal), 'No Ready priced target for strategy', 'Comparable')\n| extend MonthlyDifference = iff(ComparisonStatus == 'Comparable', BaselineReady - SelectedTotal, real(null))\n| summarize Instances = count(), Comparable = countif(ComparisonStatus == 'Comparable'), MonthlyDifference = sum(MonthlyDifference) by Currency\n| extend Excluded = Instances - Comparable, MonthlyDifference = iff(Comparable > 0, MonthlyDifference, real(null))\n| extend AnnualDifference = MonthlyDifference * 12, ThreeYearDifference = MonthlyDifference * 36\n| project Currency, Instances, Comparable, Excluded, ['Monthly Difference'] = MonthlyDifference, ['12-Month Difference'] = AnnualDifference, ['36-Month Difference'] = ThreeYearDifference\n| order by Currency asc",
-              "size": 4,
-              "title": "Azure target cost difference by currency (not on-premises TCO or realized savings)",
-              "queryType": 1,
-              "resourceType": "microsoft.resourcegraph/resources",
-              "crossComponentResources": [
-                "{Subscriptions}"
-              ],
-              "visualization": "table",
-              "showExportToExcel": true,
-              "gridSettings": {
-                "filter": true,
-                "formatters": [
-                  { "columnMatch": "Monthly Difference", "formatter": 0, "numberFormat": { "unit": 0, "emptyValCustomText": "Unavailable", "options": { "style": "decimal", "minimumFractionDigits": 2, "maximumFractionDigits": 2 } } },
-                  { "columnMatch": "12-Month Difference", "formatter": 0, "numberFormat": { "unit": 0, "emptyValCustomText": "Unavailable", "options": { "style": "decimal", "minimumFractionDigits": 2, "maximumFractionDigits": 2 } } },
-                  { "columnMatch": "36-Month Difference", "formatter": 0, "numberFormat": { "unit": 0, "emptyValCustomText": "Unavailable", "options": { "style": "decimal", "minimumFractionDigits": 2, "maximumFractionDigits": 2 } } }
-                ]
-              }
-            },
-            "customWidth": "100",
-            "name": "tco-kpi"
-          },
-          {
-            "type": 3,
-            "content": {
-              "version": "KqlItem/1.0",
-              "query": "resources\n| where type =~ 'microsoft.azurearcdata/sqlserverinstances'\n| where 'value::all' in ({ResourceGroup}) or '*' in ({ResourceGroup}) or resourceGroup in~ ({ResourceGroup})\n| where '{TagName}' == '' or tostring(tags['{TagName}']) =~ '{TagValue}'\n| extend asmt = properties.migration.assessment\n| extend r = asmt.skuRecommendationResults, Strategy = tostring(asmt.settings.strategy), Currency = coalesce(tostring(asmt.settings.currency), 'Unknown')\n| where 'value::all' in ({CurrencyFilter}) or '*' in ({CurrencyFilter}) or Currency in ({CurrencyFilter})\n| extend MICost = todouble(r.azureSqlManagedInstance.monthlyCost.totalCost), DBCost = todouble(r.azureSqlDatabase.monthlyCost.totalCost), VMCost = todouble(r.azureSqlVirtualMachine.monthlyCost.totalCost)\n| extend MIReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlManagedInstance.recommendationStatus) =~ 'Ready' and MICost >= 0, MICost, real(null)), DBReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlDatabase.recommendationStatus) =~ 'Ready' and DBCost >= 0, DBCost, real(null)), VMReadyCost = iff(tobool(asmt.enabled) == true and tostring(r.azureSqlVirtualMachine.recommendationStatus) =~ 'Ready' and VMCost >= 0, VMCost, real(null))\n| extend PaaSCheapest = min_of(MIReadyCost, DBReadyCost)\n| extend PreferredTarget = case(Strategy =~ 'MigrateToIaaS' and isnotnull(VMReadyCost), 'SQL Server on Azure VM', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest) and MIReadyCost == PaaSCheapest, 'Azure SQL MI', Strategy =~ 'MigrateToPaaS' and isnotnull(PaaSCheapest), 'Azure SQL DB', '')\n| extend SelectedTotal = case(PreferredTarget == 'SQL Server on Azure VM', VMReadyCost, PreferredTarget == 'Azure SQL MI', MIReadyCost, PreferredTarget == 'Azure SQL DB', DBReadyCost, real(null)), BaselineReady = max_of(MIReadyCost, DBReadyCost, VMReadyCost)\n| extend ComparisonStatus = case(Currency == 'Unknown', 'Unknown currency', isnull(tobool(asmt.enabled)), 'Assessment state unknown', tobool(asmt.enabled) != true, 'Assessment disabled', Strategy !in~ ('MigrateToIaaS','MigrateToPaaS'), 'Unrecognized strategy', isnull(SelectedTotal), 'No Ready priced target for strategy', 'Comparable')\n| extend MonthlyDifference = iff(ComparisonStatus == 'Comparable', BaselineReady - SelectedTotal, real(null))\n| project SQLArcResourceName = name, Strategy, PreferredTarget, ComparisonStatus, SelectedTotal, BaselineReady, ['Monthly Difference'] = MonthlyDifference, ['12-Month Difference'] = MonthlyDifference * 12, ['36-Month Difference'] = MonthlyDifference * 36, ['AHB Savings'] = 'Unavailable: matched license baseline required', ['AHB Entitlement'] = 'Not verified', Currency, ResourceId = id, ResourceGroup = resourceGroup, SubscriptionId = subscriptionId\n| order by Currency asc, MonthlyDifference desc",
-              "size": 0,
-              "showAnalytics": true,
-              "showExportToExcel": true,
-              "queryType": 1,
-              "resourceType": "microsoft.resourcegraph/resources",
-              "crossComponentResources": [
-                "{Subscriptions}"
-              ],
-              "gridSettings": {
-                "formatters": [
-                  {
-                    "columnMatch": "ComparisonStatus",
-                    "formatter": 18,
-                    "formatOptions": {
-                      "thresholdsOptions": "colors",
-                      "thresholdsGrid": [
-                        {
-                          "operator": "==",
-                          "thresholdValue": "Comparable",
-                          "representation": "green",
-                          "text": "{0}"
-                        },
-                        {
-                          "operator": "==",
-                          "thresholdValue": "No Ready priced target for strategy",
-                          "representation": "red",
-                          "text": "{0}"
-                        },
-                        {
-                          "operator": "Default",
-                          "thresholdValue": null,
-                          "representation": "gray",
-                          "text": "{0}"
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "columnMatch": "AHB Entitlement",
-                    "formatter": 1
-                  },
-                  {
-                    "columnMatch": "SelectedTotal",
-                    "formatter": 0,
-                    "numberFormat": {
-                      "unit": 0,
-                      "emptyValCustomText": "Unavailable",
-                      "options": {
-                        "style": "decimal",
-                        "minimumFractionDigits": 2,
-                        "maximumFractionDigits": 2
-                      }
-                    }
-                  },
-                  {
-                    "columnMatch": "BaselineReady",
-                    "formatter": 0,
-                    "numberFormat": {
-                      "unit": 0,
-                      "emptyValCustomText": "Unavailable",
-                      "options": {
-                        "style": "decimal",
-                        "minimumFractionDigits": 2,
-                        "maximumFractionDigits": 2
-                      }
-                    }
-                  },
-                  {
-                    "columnMatch": "AHB Savings",
-                    "formatter": 1
-                  },
-                  {
-                    "columnMatch": "Monthly Difference",
-                    "formatter": 8,
-                    "formatOptions": {
-                      "min": 0,
-                      "palette": "greenRed"
-                    },
-                    "numberFormat": {
-                      "unit": 0,
-                      "emptyValCustomText": "Unavailable",
-                      "options": {
-                        "style": "decimal",
-                        "minimumFractionDigits": 2,
-                        "maximumFractionDigits": 2
-                      }
-                    }
-                  },
-                  {
-                    "columnMatch": "12-Month Difference",
-                    "formatter": 8,
-                    "formatOptions": {
-                      "min": 0,
-                      "palette": "greenRed"
-                    },
-                    "numberFormat": {
-                      "unit": 0,
-                      "emptyValCustomText": "Unavailable",
-                      "options": {
-                        "style": "decimal",
-                        "minimumFractionDigits": 2,
-                        "maximumFractionDigits": 2
-                      }
-                    }
-                  },
-                  {
-                    "columnMatch": "36-Month Difference",
-                    "formatter": 8,
-                    "formatOptions": {
-                      "min": 0,
-                      "palette": "greenRed"
-                    },
-                    "numberFormat": {
-                      "unit": 0,
-                      "emptyValCustomText": "Unavailable",
-                      "options": {
-                        "style": "decimal",
-                        "minimumFractionDigits": 2,
-                        "maximumFractionDigits": 2
-                      }
-                    }
-                  },
-                  {
-                    "columnMatch": "SubscriptionId",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "ResourceGroup",
-                    "formatter": 5
-                  },
-                  {
-                    "columnMatch": "ResourceId",
-                    "formatter": 7,
-                    "formatOptions": {
-                      "linkTarget": "Resource",
-                      "linkLabel": "Open"
-                    }
-                  }
-                ],
-                "rowLimit": 1000,
-                "filter": true
-              },
-              "sortBy": []
-            },
-            "name": "tco-grid"
-          }
-        ]
-      },
-      "conditionalVisibility": {
-        "parameterName": "SelectedTab",
-        "comparison": "isEqualTo",
-        "value": "tco"
-      },
-      "name": "group-tco"
-    }
-  ],
+    }  ],
   "fallbackResourceIds": [
     "Azure Monitor"
   ],
